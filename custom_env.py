@@ -63,7 +63,7 @@ class ReLconcILS(gym.Env):
             self.state_dic[self.id]=self.species_tree
             self.current_state = self.id
             self.id=self.id+1
-            return self.current_state, -10, True, {}
+            return self.current_state, -100, True, {}
 
 
         print(action)
@@ -101,15 +101,12 @@ class ReLconcILS(gym.Env):
 
         if not done:
 
-            reward = -(10*self._count_discordant_branches(self.gene_tree,self.species_tree)+1)
+            reward = -(self._count_discordant_branches(self.gene_tree,self.species_tree)+1)
 
         else:
-            
+        
             reward=-1
-            try:
-                reward += 100
-            except:
-                reward=-100
+
 
         self.state_dic[self.id]=self.species_tree
         self.current_state = self.id
@@ -304,12 +301,12 @@ def epsilon_greedy(env,Q, state, epsilon, nA):
 
         return [rand1,rand2]
     else: 
-        rand= np.random.choice(np.flatnonzero(Q[state] == np.max(Q[state])))
+        rand= np.random.choice(np.flatnonzero(Q[state][:3*len(env.list_mode)] == np.max(Q[state][:3*len(env.list_mode)])))
         action= rand%3 
         branch = int(rand/3)
         while branch>=len(env.list_mode):
             print(branch,len(env.list_mode))
-            rand= np.random.choice(np.flatnonzero(Q[state] == np.max(Q[state])))
+            rand= np.random.choice(np.flatnonzero(Q[state][:3*len(env.list_mode)] == np.max(Q[state][:3*len(env.list_mode)])))
             action= rand%3 
             branch = int(rand/3)
         return [action,branch]
@@ -321,6 +318,7 @@ visit_count={}
 def update_Q(Q, state, action, reward,terminated, next_state, next_action, alpha, gamma):
     action=action[0]*action[1]
     next_action= next_action[0]*next_action[1]
+    #Q[:,:3*len(env.list_mode)][Q[:,:3*len(env.list_mode)] == -1e6] = 0
     if terminated:
         Q[state, action] =Q[state, action] + alpha* reward
 
@@ -330,24 +328,21 @@ def update_Q(Q, state, action, reward,terminated, next_state, next_action, alpha
 
 def evaluate_policy(env, policy,gamma):
     total_rewards = []
-    for i in range(5):
+    for i in range(10):
         state, prob = env.reset()
         print(i)
 
         episode_reward = 0
         isfinal = False
         epi=0
-        while not isfinal and epi<5:
+        while not isfinal and epi<100:
             
-            rand= np.argmax(policy[state])
+            rand= np.argmax(policy[state][:3*len(env.list_mode)])
             action= rand%3 
-            branch = int(rand/3)
-            while branch>=len(env.list_mode):
-                rand= np.argmax(policy[state])
-                action= rand%3 
-                branch = int(rand/3)
-                print(rand,branch)
+            branch = int(rand/3)+1
             action= [action,branch]
+            
+
            
             state, reward, isfinal, _ = env.step(action)
             epi=epi+1
@@ -357,6 +352,8 @@ def evaluate_policy(env, policy,gamma):
     return sum(total_rewards) / 5
 
 def update_val_Q(env,nA,Q):
+    
+
     Q[:,nA*len(env.list_mode) :][Q[:,nA*len(env.list_mode) :] != -1e6] = -1e6
 
     return Q
@@ -364,11 +361,11 @@ def update_val_Q(env,nA,Q):
 def sarsa(env, nS, nA,rewards,ep, episodes, alpha=0.01, gamma=0.999):
 
     Q = np.zeros((nS, nA*20))
-    Q = update_val_Q(env,nA,Q)
+    #Q = update_val_Q(env,nA,Q)
     data=[]
 
     for I in range(episodes):
-        epsilon  = ep*(episodes-I-1)/(episodes-1)
+        epsilon  = ep
         state, _ = env.reset()
 
 
@@ -399,7 +396,7 @@ def sarsa(env, nS, nA,rewards,ep, episodes, alpha=0.01, gamma=0.999):
             print(I)
 
 
-        if I%2==0:
+        if I%20==0:
             print('evaluate')
 
             if I in rewards:
@@ -418,10 +415,10 @@ if __name__ == "__main__":
 
     
     reward ={}
-    for i in range(2):
-        env = ReLconcILS('(A,(B,C));','(C,(A,B))')
-        Q,reward =sarsa(env, 100, 3,reward,ep=0.5,episodes=100, alpha=0.01, gamma=0.999)
-   
+    for i in range(20):
+        env = ReLconcILS('(A,(B,C));','A')
+        Q,reward =sarsa(env, 100, 3,reward,ep=0.8,episodes=100, alpha=0.01, gamma=0.999)
+  
     env = ReLconcILS('(A,(B,C));','(B,(A,C))')
     evaluate_policy(env, Q,0.999)
     df = pd.DataFrame(reward)
@@ -429,6 +426,6 @@ if __name__ == "__main__":
     ax= df.boxplot()
     ax.set_title('sarsa')
     fig = ax.get_figure()
-    fig.savefig('sarsa_reconcILS.png', dpi=300)
+    fig.savefig('sarsa_reconcILS_1_loss.png', dpi=300)
     plt.clf()
 
